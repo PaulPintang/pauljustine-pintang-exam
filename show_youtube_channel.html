@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400&display=swap"
+      rel="stylesheet"
+    />
+    <title>Youtube Channel Information</title>
+    <style>
+      body {
+        font-family: "Lato", sans-serif;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app" class="container mx-auto px-6 md:px-10 lg:px-10">
+      <section v-if="videos.length !== 0">
+        <div class="sticky top-0 bg-white py-3 z-10">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div>
+                <img
+                  :src="channel_info.profilePicture"
+                  alt="profile picture"
+                  class="w-[40px] rounded-full"
+                />
+              </div>
+              <div class="">
+                <h1 class="text-l font-bold">{{channel_info.name}}</h1>
+                <p class="text-gray-700 text-sm">100 latest videos</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="gap-3 items-center hidden md:flex lg:flex">
+                <input
+                  v-model="channel_id"
+                  type="text"
+                  @focus="error = ''"
+                  :class="{'ring-red-400': error}"
+                  class="block outline-none w-[230px] rounded-md border-0 py-1.5 pl-3 pr-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6"
+                  :placeholder="error ? error : 'Youtube Channel ID'"
+                  s
+                  spellcheck="false"
+                />
+                <button
+                  @click="syncYTChannel"
+                  :class="{'bg-gray-200': channel_id.length < 10}"
+                  class="bg-gray-700 text-white w-max px-3 py-2 rounded-md text-sm"
+                  :disabled="loading || channel_id.length === 0"
+                >
+                  <span v-if="loading">Loading...</span>
+                  <span v-else>Sync</span>
+                </button>
+              </div>
+              <div class="relative bg-gray-700 rounded-md">
+                <button @click="toggle" class="text-sm py-2 px-4">
+                  <div class="flex items-center gap-5">
+                    <span class="text-gray-100">{{viewChannel}}</span>
+                    <svg
+                      class="fill-current h-4 w-4 text-gray-100"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"
+                      />
+                    </svg>
+                  </div>
+                </button>
+                <div
+                  v-if="show"
+                  class="absolute bg-white border-solid border-[1px] border-gray-100 py-2 w-full right-0 mt-2 rounded-lg shadow-xl"
+                >
+                  <div v-for="channel in channels" :key="channel.thumbnail">
+                    <button
+                      @click="toggle(); fetchApiData(channel.name)"
+                      class="w-full hover:bg-gray-100 text-sm py-1 text-gray-500 hover:text-gray-800 transition-all"
+                    >
+                      {{channel.name}}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 w-full h-[calc( 100vh-180px)]"
+        >
+          <div v-for="video in displayedVideos" :key="video.id">
+            <a
+              :href="video.videoLink"
+              class="w-full hover:opacity-70 transition-all space-y-3"
+              target="_blank"
+            >
+              <img class="w-full rounded-md" :src="video.thumbnail" alt="" />
+              <div class="space-y-1">
+                <h3 class="font-bold text-sm">{{video.title}}</h3>
+                <p class="w-auto truncate text-sm">{{video.description}}</p>
+              </div>
+            </a>
+          </div>
+        </div>
+        <section class="pt-2 sticky bg-white bottom-0">
+          <hr />
+          <div class="flex justify-between items-center gap-8 py-3">
+            <p class="text-sm text-gray-500">
+              Page {{ currentPage }} of {{ totalPages }}
+            </p>
+            <div class="flex gap-3 bg-gray-900 px-4 py-1 pb-2 rounded-md">
+              <button
+                @click="prevPage"
+                :disabled="currentPage === 1"
+                class="text-gray-100"
+              >
+                <span
+                  :class="{'text-gray-500': currentPage === 1, 'text-sm': true}"
+                >
+                  < Prev</span
+                >
+              </button>
+              <span class="text-gray-100">-</span>
+              <button
+                @click="nextPage"
+                :disabled="currentPage === totalPages"
+                class="text-gray-100"
+              >
+                <span
+                  :class="{'text-gray-500': currentPage === totalPages, 'text-sm': true}"
+                  >Next ></span
+                >
+              </button>
+            </div>
+          </div>
+        </section>
+        <div class="w-full pt-3 pb-6">
+          <p class="text-sm">
+            <span class="font-bold"> About {{channel_info.name}}: </span
+            >{{channel_info.description}}
+          </p>
+        </div>
+      </section>
+      <!-- Initial UI -->
+      <section v-else class="h-screen md:text-[28px] lg:text-[28px]">
+        <div class="flex items-center justify-center h-full">
+          <div class="text-gray-500 space-y-5">
+            <h1
+              class="font-bold md:text-[45px] lg:text-[45px] text-[25px] text-black"
+            >
+              Get 100 latest videos from a YouTube channel!
+            </h1>
+            <div>
+              <p class="text-gray-800">
+                You need channel ID. How to get Youtube Channel ID ?
+              </p>
+              <p>
+                <span class="text-black">Step 1:</span> Go to your selected
+                youtube channel.
+              </p>
+              <p>
+                <span class="text-black">Step 2:</span> Right click the page and
+                click 'View page source'
+              </p>
+              <p>
+                <span class="text-black">Step 3:</span> Type Ctrl + f then
+                search 'channel_id'
+              </p>
+              <p>
+                <span class="text-black">Step 4:</span> Copy the Channel ID. It
+                should look like this: <span>UC##################</span>
+              </p>
+            </div>
+            <div class="flex items-center justify- between gap-4">
+              <input
+                v-model="channel_id"
+                type="text"
+                @input="error = ''"
+                :class="{'ring-red-400': error}"
+                class="block outline-none lg:w-[260px] w-full rounded-md border-0 py-2 pl-5 pr-7 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-600 sm:text-sm sm:leading-6"
+                :placeholder="error ? 'Channel not found!' : 'Youtube Channel ID'"
+                spellcheck="false"
+              />
+              <button
+                @click="syncYTChannel"
+                class="bg-black transition-all text-white py-2 w-max px-5 rounded-md text-[16px]"
+                :class="{'bg-gray-400': channel_id.length < 10}"
+                :disabled="loading || channel_id.length === 0"
+              >
+                <span v-if="loading">Loading...</span>
+                <span v-else>Sync</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const { createApp, ref, onMounted, computed } = Vue;
+      createApp({
+        setup() {
+          const channel_id = ref("");
+          const channels = ref([]);
+          const channel_info = ref({});
+          const videos = ref([]);
+          const itemsPerPage = ref(20);
+          const currentPage = ref(1);
+          const show = ref(false);
+          const viewChannel = ref("");
+          const loading = ref(false);
+          const error = ref("");
+
+          const fetchApiData = async (selectedChannel) => {
+            if (selectedChannel) {
+              viewChannel.value = selectedChannel;
+            }
+            try {
+              const response = await fetch(
+                "http://localhost/Codalify/youtube_channel_json.php",
+                {
+                  method: "POST",
+                  body: JSON.stringify({
+                    channel: selectedChannel || viewChannel.value,
+                  }),
+                }
+              );
+              const data = await response.json();
+              videos.value = data.videos;
+              channels.value = data.channels;
+              localStorage.setItem("channel", viewChannel.value);
+              channel_info.value = data.channels.find(
+                (item) => item.name === viewChannel.value
+              );
+              channel_id.value = "";
+            } catch (error) {
+              console.error("Error fetching API data:", error);
+            }
+          };
+
+          const syncYTChannel = async () => {
+            loading.value = true;
+            try {
+              const response = await fetch(
+                "http://localhost/Codalify/sync_youtube_channel.php",
+                {
+                  method: "POST",
+                  body: JSON.stringify({
+                    channel_id: channel_id.value,
+                  }),
+                }
+              );
+              const data = await response.json();
+              channel_id.value = "";
+              loading.value = false;
+              if (data.error) {
+                error.value = data.error;
+                return;
+              }
+              videos.value = data.videos;
+              channel_info.value = data.channel;
+              channels.value.push(data.channel);
+              localStorage.setItem("channel", data.channel.name);
+              viewChannel.value = data.channel.name;
+            } catch (err) {
+              console.error("Error fetching API data:", err);
+              error.value = "Channel not found";
+              loading.value = false;
+              channel_id.value = "";
+            }
+          };
+
+          onMounted(() => {
+            if (localStorage.getItem("channel")) {
+              viewChannel.value = localStorage.getItem("channel");
+            }
+            fetchApiData();
+          });
+
+          const totalPages = computed(() =>
+            Math.ceil(videos.value.length / itemsPerPage.value)
+          );
+          const startIdx = computed(
+            () => (currentPage.value - 1) * itemsPerPage.value
+          );
+          const endIdx = computed(() => startIdx.value + itemsPerPage.value);
+          const displayedVideos = computed(() =>
+            videos.value.slice(startIdx.value, endIdx.value)
+          );
+
+          const nextPage = () => {
+            if (currentPage.value < totalPages.value) {
+              currentPage.value++;
+            }
+          };
+
+          const prevPage = () => {
+            if (currentPage.value > 1) {
+              currentPage.value--;
+            }
+          };
+
+          const toggle = () => {
+            show.value = !show.value; // Toggle the value
+          };
+
+          return {
+            channel_id,
+            channel_info,
+            show,
+            channels,
+            videos,
+            totalPages,
+            currentPage,
+            displayedVideos,
+            viewChannel,
+            loading,
+            error,
+            syncYTChannel,
+            fetchApiData,
+            toggle,
+            nextPage,
+            prevPage,
+          };
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
